@@ -1,0 +1,146 @@
+1. Instala los paquetes requeridos para la configuración de PXE
+
+yum install dhcp tftp tftp-server syslinux vsftpd xinetd
+
+2. Configurar el servidor DHCP para PXE /etc/dhcp/dhcpd.conf
+
+# DHCP Server Configuration file.
+
+ddns-update-style interim;
+ignore client-updates;
+authoritative;
+allow booting;
+allow bootp;
+allow unknown-clients;
+
+# internal subnet for my DHCP Server
+subnet 192.168.50.0 netmask 255.255.255.0 {
+range 192.168.50.3 192.168.50.253;
+option domain-name-servers 192.168.50.3;
+option domain-name "pxe.example.com";
+option routers 192.168.50.3;
+option broadcast-address 192.168.50..255;
+default-lease-time 600;
+max-lease-time 7200;
+
+# IP of PXE Server
+next-server 192.168.50.3;
+filename "pxelinux.0";
+}
+
+3. Editar y configurar el servidor tftp (/etc/xinetd.d/tftp)
+
+service tftp
+{
+ socket_type = dgram
+ protocol    = udp
+ wait        = yes
+ user        = root
+ server      = /usr/sbin/in.tftpd
+ server_args = -s /var/lib/tftpboot
+ disable     = no
+ per_source  = 11
+ cps         = 100 2
+ flags       = IPv4
+}
+
+copiar los archivos de arranque de red necesarios en '/ var / lib / tftpboot /'
+
+cp -v /usr/share/syslinux/pxelinux.0 /var/lib/tftpboot
+cp -v /usr/share/syslinux/menu.c32 /var/lib/tftpboot
+cp -v /usr/share/syslinux/memdisk /var/lib/tftpboot
+cp -v /usr/share/syslinux/mboot.c32 /var/lib/tftpboot
+cp -v /usr/share/syslinux/chain.c32 /var/lib/tftpboot
+
+mkdir /var/lib/tftpboot/pxelinux.cfg
+mkdir /var/lib/tftpboot/networkboot
+
+4 Monte el archivo ISO CentOS 7.x y copie su contenido al servidor ftp local
+
+mount -o loop CentOS-7-x86_64-DVD-1511.iso /mnt/
+copie su contenido en el directorio del servidor ftp ' / var / ftp / pub '
+cp -av * /var/ftp/pub/
+
+Copie el archivo Kernel (vmlimz) y el archivo initrd del archivo iso montado a ' / var / lib / tftpboot / networkboot / '
+cp /mnt/images/pxeboot/vmlinuz /var/lib/tftpboot/networkboot/
+cp /mnt/images/pxeboot/initrd.img /var/lib/tftpboot/networkboot/
+
+Ahora puede desmontar el archivo iso usando el comando 'umount'
+umount /mnt/
+
+5 Crea el archivo de menú kickStart & PXE.
+
+openssl passwd -1 [contraseña]
+
+Crearemos un nuevo kickstart en la carpeta / var / ftp / pub con el nombre ' centos7.cfg '
+#platform=x86, AMD64, or Intel EM64T
+#version=DEVEL
+# Firewall configuration
+firewall --disabled
+# Install OS instead of upgrade
+install
+# Use FTP installation media
+url --url="ftp://172.168.1.11/pub/"
+# Root password
+rootpw --iscrypted $1$e2wrcGGX$tZPQKPsXVhNmbiGg53MN41
+# System authorization information
+auth useshadow passalgo=sha512
+# Use graphical install
+graphical
+firstboot disable
+# System keyboard
+keyboard us
+# System language
+lang en_US
+# SELinux configuration
+selinux disabled
+# Installation logging level
+logging level=info
+# System timezone
+timezone Europe/Amsterdam
+# System bootloader configuration
+bootloader location=mbr
+clearpart --all --initlabel
+part swap --asprimary --fstype="swap" --size=1024
+part /boot --fstype xfs --size=300
+part pv.01 --size=1 --grow
+volgroup root_vg01 pv.01
+logvol / --fstype xfs --name=lv_01 --vgname=root_vg01 --size=1 --grow
+%packages
+@^minimal
+@core
+%end
+%addon com_redhat_kdump --disable --reserve-mb='auto'
+%end
+
+Cree un archivo de menú PXE ( /var/lib/tftpboot/pxelinux.cfg/default )
+default menu.c32
+prompt 0
+timeout 30
+MENU TITLE LinuxTechi.com PXE Menu
+LABEL centos7_x64
+MENU LABEL CentOS 7_X64
+KERNEL /networkboot/vmlinuz
+APPEND initrd=/networkboot/initrd.img inst.repo=ftp://172.168.1.11/pub ks=ftp://172.168.1.11/pub/centos7.cfg
+
+6 Inicia y habilita los servicios xinetd, dhcp y vsftpd.
+
+systemctl start xinetd
+systemctl enable xinetd
+systemctl start dhcpd.service
+systemctl enable dhcpd.service
+systemctl start vsftpd
+systemctl enable vsftpd
+
+En caso de que SELinux esté habilitado, configure la siguiente regla de selinux para el servidor ftp.
+setsebool -P allow_ftpd_full_access 1
+
+Abra los puertos en el firewall del sistema operativo usando los siguientes comandos firewall-cmd
+firewall-cmd --add-service=ftp --permanent
+firewall-cmd --add-service=dhcp --permanent
+firewall-cmd --add-port=69/tcp --permanent 
+firewall-cmd --add-port=69/udp --permanent 
+firewall-cmd --add-port=4011/udp --permanent
+firewall-cmd --reload
+
+7 Arranca los clientes con la opción de arranque de red.

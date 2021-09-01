@@ -1,0 +1,19 @@
+1 Instalar el vagrant share plugin
+vagrant plugin install vagrant-share
+
+2 Descargar en ngrok
+Agregar la ruta donde guardamos ngrok al path del SO
+
+3 Deberá registrarse para obtener una cuenta de ngrok
+	ngrok generará un código de autorización que podrá ver en la página de su cuenta de ngrok
+ngrok authtoken [código de autorización]
+
+4 Crear el forwarded_port en el vagrant file
+servidor.vm.network :forwarded_port, guest:80, host:8083
+servidor.vm.network :forwarded_port, guest:443, host:8443
+
+5 Ejecutar el siguiente comando, que nos general la url publica para acceder al servidor
+vagrant share servidor --http 8083
+
+Nota: en el servidor asegurarse de tener activo en servicio httpd
+service httpd start
