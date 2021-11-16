@@ -1,0 +1,5 @@
+Tunel
+https://github.com/saizilvira/servicios/blob/master/Parcial1/TunelScripts_parcial1.txt
+
+PXE
+https://github.com/saizilvira/servicios/blob/master/Parcial1/PXEScripts_parcial1.txt
